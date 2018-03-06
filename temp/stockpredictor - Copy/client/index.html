@@ -1,0 +1,200 @@
+<html>
+	<head>
+		<title></title>
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"/>
+		<script src="https://unpkg.com/react@15/dist/react.js"></script>
+		<script src="https://unpkg.com/react-dom@15/dist/react-dom.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-core/5.8.25/browser.js"></script>
+		<script src="./papaparse.min.js"></script>
+		<script  src="https://code.jquery.com/jquery-3.2.1.min.js" integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=" crossorigin="anonymous"></script>
+	</head>
+	<body>
+		<div class="container">
+			<div class="row">
+				<div class="col-md-4 col-md-offset-4">
+					<h1 class="page-header"> Stock Predictor</h1>
+					<div id="regForm"></div>
+				</div>
+			</div>
+		</div>
+	</body>
+	<script type="text/babel">
+
+		class RegForm extends React.Component{
+			
+			examine(e) {
+				e.preventDefault();
+
+				var csv = document.getElementById('csv').files[0];
+				
+				var dates = getDates();
+				var startDate = dates[0];
+				var endDate   = dates[1];
+				if (!(checkDates(startDate, endDate))) {
+					return false;
+				}
+
+			    Papa.parse(csv, {
+			      header: true,
+			      dynamicTyping: true,
+			      complete: function(results) {
+			        	var found = false;
+			        	var dataSet = getPatternDataSet(results, startDate, endDate);
+			        	if (dataSet.length > 0) console.log(dataSet);
+
+                        //var dataSet = convertToPercentages(dataSet);
+                        //console.log(dataSet);                
+
+                        //Find all instances where open, close, high, and low match the first candle in the pattern
+                        for(var i=0; i < (results.data.length - dataSet.length); i++) {
+                            var k = 0;
+                            for ( ; k < dataSet.length; k++) {
+                                if (!equalWhenComparedAsPercentages(dataSet[k], results.data[i+k])) {                               	 	
+                               	  break;
+                                }                                                     
+                            }
+                            if (k==dataSet.length) {
+                            	$('#result').append("<br/>Found at " + results.data[i].Date + " and " + (dataSet.length - 1) + " previous trading days");    
+                            	found = true;
+                            }    
+                        }    
+                        if (!found) $('#result').html("not found");        
+			       }
+			    });
+			}
+
+			render() {
+				return (
+					<div>
+						<div>
+							<form onSubmit= { this.examine }>													
+								<div className="form-group">
+									<div>
+										Start Date:<input className="form-control" id="startDate" type="date"/>
+									</div>
+									<br/>
+									<div>
+										End Date:<input className="form-control" id="endDate" type="date"/>	
+									</div>		
+									<br/>			
+									<div>
+										<label htmlFor="File">Stock History CSV file: </label>
+										<input type="file" className="form-control" id="csv" placeholder="File" ref="file"/>
+									</div>
+								</div>
+								<button type="submit" id="addCSVButton" className="btn btn-primary" value="Add">Add CSV</button>
+							</form> 						
+						</div>
+						<div>
+							<p id="result"> </p>
+						</div>
+					</div>
+				);
+			}
+		};
+
+		ReactDOM.render(
+			<RegForm />, document.getElementById("regForm")
+		);
+
+		function getDates() {
+			var monthNames = [ "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" ];
+
+			//Start Date
+			var startDateInput = document.getElementById('startDate').value;
+			startDateInput = startDateInput.split('-');
+			var startDate = parseInt(startDateInput[2], 10) + "-" + monthNames[parseInt(startDateInput[1], 10) - 1] + "-" + startDateInput[0].substr(2,2);
+
+			//End Date
+			var endDateInput = document.getElementById('endDate').value;
+			endDateInput = endDateInput.split('-');
+			//add 1 to end date to know where to stop
+			var endDate = parseInt(endDateInput[2], 10) + "-" + monthNames[parseInt(endDateInput[1], 10) - 1] + "-" + endDateInput[0].substr(2,2);
+			
+			return [startDate, endDate];
+		}
+
+		function checkDates(startDate, endDate) {		
+			var currDate = new Date();
+        	var chkStart = new Date(startDate);
+        	var chkEnd = new Date(endDate);
+        	
+        	if (chkStart.getTime() >= currDate.getTime()) {
+        		alert("Start date cannot be today or in the future.")
+        		return false;
+        	}
+        	if (chkEnd.getTime() < chkStart.getTime()) {
+        		alert("End date cannot be before start date.");
+                return false;
+        	}
+        	if ((chkStart.getDay()%6==0) || (chkEnd.getDay()%6==0)) {
+        		alert("Dates cannot be weekends.")
+        		return false;
+        	}
+
+            return true;
+		}
+
+        function equalWhenComparedAsPercentages(data_A, data_B) {
+            if (data_A === data_B) return false;
+
+            var data_A_AsPercent = getPercentChange(data_A);
+            var data_B_AsPercent = getPercentChange(data_B);
+            var percentError = .25;
+
+            if ((data_A_AsPercent[0] - data_B_AsPercent[0]) <= percentError) {            	
+            	if ((data_A_AsPercent[1] - data_B_AsPercent[1]) <= percentError) {            		
+            		if ((data_A_AsPercent[2] - data_B_AsPercent[2]) <= percentError) {
+            			//console.log("Open to close: " + data_A_AsPercent[0] + "{}" +  data_B_AsPercent[0]);
+            			//console.log("Open to high: " + data_A_AsPercent[1] + "{}" +  data_B_AsPercent[1]);
+            			//console.log("Open to low: " + data_A_AsPercent[2] + "{}" +  data_B_AsPercent[2]);
+            			//console.log(data_A.Date + "{}" + data_B.Date)
+            			return true;
+            		}
+            	}
+            }
+
+            return false;
+        }
+
+		function getPatternDataSet(results, startDate, endDate) {
+						
+            var retVal = [];
+            var startIdx = -1;
+
+        	for (var i= 0; i < results.data.length - 1; i++) {
+        		if (results.data[i].Date == startDate) {
+        			startIdx = i;
+        			break; 	
+        		}
+        	}
+
+        	if (startIdx != -1) {
+        		while ((results.data[startIdx].Date != endDate) && (startIdx > 0)) 
+    			{		        				
+                    retVal.push(results.data[startIdx]);
+					startIdx--;
+    			}
+
+    			//Now add the data from end date
+    			if (results.data[startIdx].Date == endDate) {
+                    retVal.unshift(results.data[startIdx]);
+    			}    		
+			}
+			else {
+				alert("Start date was not found. Make sure this was not a stock holiday.");
+				return [];
+			}	
+            
+            return retVal;	    
+		}
+
+		function getPercentChange(dataSet) {			
+			var openToClose = ((dataSet.Close - dataSet.Open)/dataSet.Open) * 100;
+			var openToHigh	= ((dataSet.High - dataSet.Open)/dataSet.Open) * 100;
+			var openToLow	= ((dataSet.Low - dataSet.Open)/dataSet.Open) * 100;
+
+			return [openToClose, openToHigh, openToLow];
+		}
+	</script>
+</html>

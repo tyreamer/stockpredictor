@@ -1,0 +1,497 @@
+<html>
+    <head>
+        <title></title>
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"/>
+        <script src="https://unpkg.com/react@15/dist/react.js"></script>
+        <script src="https://unpkg.com/react-dom@15/dist/react-dom.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-core/5.8.25/browser.js"></script>
+        <script src="./papaparse.min.js"></script>
+        <script  src="https://code.jquery.com/jquery-3.2.1.min.js" integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=" crossorigin="anonymous"></script>
+        <script src="./canvasjs.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.16.2/axios.min.js"></script>
+        <style>
+            @font-face {
+			  font-family: 'PassionOneBold';
+			  src: url('PassionOneBold.otf')  format('truetype'), /* Safari, Android, iOS */
+				   url('PassionOneBold.ttf')  format('truetype')
+			}
+			#mainBody {
+				padding-top: 10%;
+			}
+			
+			body{
+				font-family: 'Lato', sans-serif;
+			}
+			
+			.resultChart {
+                clear: both;
+            }	
+
+			#viewNextCandles {
+				height: 60px;
+				margin-top: 150px;
+			}
+						
+			.navigateMatches {
+				margin-top: 15%;
+			}
+
+            .centered {
+                display: block;
+                margin-left: auto;
+                margin-right: auto;
+            }
+        </style>
+    </head>
+    <body>
+        <div>
+            <div class="container">
+                <div class="row">                        
+                        <div id="mainBody"></div>										
+                        </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    <script type="text/babel">
+        
+        var startDateIdx = -1;
+        var csv = []
+        var currResult=0;			
+        var allMatches =[];
+        var resultsChart;
+		
+        class RangeCheck extends React.Component{
+            
+            examine(e) {
+                
+				e.preventDefault();
+                $('#submitButton').prop('disabled', true);
+				toggleLoading();				
+                clearPrevious();
+				
+                var recent;
+				var ticker; 
+				var startDate;
+				var endDate;
+				var errorPct; 
+				
+				if ( !(document.getElementById('ticker').value) ||
+					 !(document.getElementById('startDate').value) ||
+					 !(document.getElementById('endDate').value) ||
+					 !(document.getElementById('percentError').value)
+					) 
+				{
+					recent = localStorage.getItem("recentSearch").split(',');
+					
+					if(recent) {
+						ticker = recent[0];										
+						startDate = recent[1];
+						endDate   = recent[2];					
+						errorPct = recent[3];	
+					}
+					else {
+						alert('Please enter all values before submitting.')
+						return;
+					}
+				}
+				else {
+					ticker = document.getElementById('ticker').value.trim();										
+					startDate = document.getElementById('startDate').value;
+					endDate   = document.getElementById('endDate').value;							
+					errorPct = document.getElementById('percentError').value;	
+					localStorage.setItem("recentSearch", [ticker, startDate, endDate, errorPct]);
+				}
+				
+                getCSV("https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=" + ticker + "&apikey=L8WBFX43LBSW8D3V&datatype=csv&outputsize=full", startDate, endDate, errorPct) //document.getElementById('csv').files[0];				
+			}
+            
+            render() {
+                                
+                return (
+                    <div>
+                        <div className="col-md-4" id="searchArea">		   
+                            <form onSubmit= { this.examine }>													
+                                <h3>Candle Screener </h3>
+								<div className="form-group">              
+									<div>
+                                        <input type="text" className="form-control" id="ticker" style= {{ textTransform: 'uppercase' }} placeholder="Ticker" ref="ticker"/>
+                                    </div>	
+									<br/>
+									<div>
+                                        <label htmlFor="startDate">Start Date:</label>
+										<div className="input-group date">
+											<input className="form-control" id="startDate" type="date"/>
+											<span className="input-group-addon"><span className="glyphicon-calendar glyphicon"></span></span>
+										</div>
+                                    </div>
+									<br/>
+                                    <div>
+                                       <label htmlFor="endDate">End Date:</label>
+									   <div className="input-group date">
+											<input className="form-control" id="endDate" type="date"/>
+											<span className="input-group-addon"><span className="glyphicon-calendar glyphicon"></span></span>
+										</div>
+                                    </div>	
+                                    <div>	
+                                        <input className="form-control" id="percentError" type="number" style={{ display: 'none' }}defaultValue="50"/>
+                                    </div>
+                                </div>	
+								<button type="submit" id="submitButton" className="btn btn-block btn-primary" value="Add">Find all matches!</button>	
+								<button type="button" id="clear" className="btn btn-block btn-danger" value="Clear">Reset</button>
+												
+								<div id="mostRecent"></div>    
+                            </form> 
+                            <div>							
+                            <div id="loading-container"></div>							
+							 <div className = "row">								
+								<div id="chartContainer" className="col-md-11" style={{ height: '200px' }}></div>	
+								<div className="col-md-1"></div>
+							 </div>
+                        </div>							
+                        </div>
+                        
+                        <div className="col-md-8">
+							 <section id="resultsSection" style={{ display: 'none' }}>
+								 <div className = "row">
+									<div className="col-xs-2">									
+										<button type='button' className='btn btn-default navigateMatches' id='viewPrevious' style= {{ float: 'right' }}><span className='glyphicon glyphicon-menu-left'/> </button>									
+									</div>	
+									<div className="col-xs-8">	
+										<p id="result" style={{ textAlign: 'center' }}> </p>			
+									</div>
+									<div className="col-xs-2">	
+										<button type='button' className='btn btn-default navigateMatches' id='viewNext' style= {{ float: 'left' }}><span className='glyphicon glyphicon-menu-right'/></button>
+									</div>									
+								</div>
+								 <div className = "row">		
+									<div id="chartResults" className="col-md-11"  style={{ height: '400px' }}></div>
+									<div className="col-md-1" style={{ height: '400px' }}>
+										<button type='button' className='btn btn-info' id='viewNextCandles'> <span className='glyphicon glyphicon-forward'/></button>
+									</div>
+								 </div>	
+							</section>
+                        </div>				
+                    </div>
+                    
+                );
+            }
+        };
+
+        ReactDOM.render(
+            <RangeCheck />, document.getElementById("mainBody")
+        );
+
+        function checkDates(startDate, endDate) {		
+            var currDate = new Date();
+            var chkStart = new Date(startDate);
+            var chkEnd = new Date(endDate);
+            
+            if (chkStart.getTime() >= currDate.getTime()) {
+                alert("Start date cannot be today or in the future.")
+                return false;
+            }
+            if (chkEnd.getTime() < chkStart.getTime()) {
+                alert("End date cannot be before start date.");
+                return false;
+            }
+
+            return true;
+        }
+
+        function equalWhenComparedAsPercentages(data_A_Prev,data_A, data_B_Prev, data_B, errorPct) {
+            
+            var percentError = errorPct / 100;
+            
+            if (data_A === data_B) return false;
+            
+            var data_A_candle = getCandlePartsAsPercentage(data_A);
+            var data_B_candle = getCandlePartsAsPercentage(data_B);
+            
+            if (data_A_candle.IsGreen === data_B_candle.IsGreen) {				
+                if (((data_A_candle.TopTail - percentError) <= data_B_candle.TopTail) && ((data_A_candle.TopTail + percentError) >= data_B_candle.TopTail)) {
+                    if (((data_A_candle.Body - percentError) <= data_B_candle.Body) && ((data_A_candle.Body + percentError) >= data_B_candle.Body)) {
+                        if (((data_A_candle.BottomTail - percentError) <= data_B_candle.BottomTail) && ((data_A_candle.BottomTail + percentError) >= data_B_candle.BottomTail)) {														
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+        
+        function getPatternDataSet(results, startDate, endDate) {
+                        
+            var retVal = [];
+            
+            for (var i= 0; i < results.data.length - 1; i++) {            
+                if (results.data[i].timestamp == startDate) {
+                    startDateIdx = i;
+                    break; 	
+                }
+            }
+
+            if (startDateIdx != -1) {
+                
+                //add previous day's data for comparison 
+                retVal.push(results.data[startDateIdx + 1]);
+                
+                //add data from all concurrent dates
+                while ((results.data[startDateIdx].timestamp != endDate) && (startDateIdx > 0)) 
+                {		
+                    retVal.push(results.data[startDateIdx]);
+                    startDateIdx--;
+                }
+
+                //add data from end date
+                if (results.data[startDateIdx].timestamp == endDate) {
+                    retVal.push(results.data[startDateIdx]);
+                }    	
+                else {
+                    alert("End date was not found. Make sure this was not a stock holiday.");
+                    return [];
+                }				
+            }
+            else {
+                alert("Start date was not found. Make sure this was not a stock holiday.");
+                return [];
+            }	
+            return retVal;	    
+        }
+
+		function getNextNCandles(results, startDate, n) {
+           if (results.data[0].timestamp < results.data[1].timestamp) results.data.reverse();   
+			        
+            var retVal = [];
+            
+            for (var i= 0; i < results.data.length - 1; i++) {            
+                if (results.data[i].timestamp == startDate) {
+                    startDateIdx = i;
+                    break; 	
+                }
+            }
+
+            if (startDateIdx != -1) {
+                //start at next day 
+				startDateIdx--;
+		
+                //add data from all concurrent dates
+                while (n > 0) 
+                {		
+                    if (results.data[startDateIdx] != null) 
+						retVal.push(results.data[startDateIdx]);
+                    startDateIdx--;
+					n--;
+                }      
+            }
+            else {
+                alert("Something went wrong, please try again.");
+                return [];
+            }	
+            return retVal;	    
+        }
+        
+        function getCandlePartsAsPercentage(data) {
+            
+            var totalHeight = data.close - data.open;			
+            var isGreen 	= ((totalHeight > 0) ? true: false);
+            var topTail 	= isGreen ? (((data.high - data.close)/data.close) * 100) : (((data.high - data.open)/data.open) * 100);
+            var body 		= isGreen ? (((data.open - data.close)/data.close) * 100) : (((data.close - data.open)/data.open) * 100);
+            var bottomTail	= isGreen ? (((data.low - data.open)/data.open) * 100) : (((data.low - data.close)/data.close) * 100);
+            
+            return {IsGreen: isGreen, TopTail: topTail, Body: body, BottomTail: bottomTail};
+        }
+        
+        function makeChart(data, divName) {
+            divName = divName.toString();
+            var dataArr = [];
+            for(var i =1; i<data.length; i++) {
+                var date =  data[i].timestamp;
+                if (data[i].open != "undefined") {
+                    var tempArr = [data[i].open, data[i].high, data[i].low, data[i].close];	
+                    dataArr.push({label: date, y: tempArr});
+                }
+            }
+            
+            resultsChart = new CanvasJS.Chart(divName, {
+
+                zoomEnabled: true,
+                axisY: {
+                     gridThickness: 0,
+                    title: "",
+                    tickLength: 0,
+                     margin:0,
+                     lineThickness:0,
+                     valueFormatString:" ",
+                    includeZero: false
+                },
+                axisX: {
+                      gridThickness: 0,
+                     title: "",					 
+                     tickLength: 0,
+                     margin:0,
+                     lineThickness:0,
+                     valueFormatString:" "
+                },
+                data: [
+                    {
+						risingColor: "#5cb85c",
+						color: "#428bca",
+						type: "candlestick",
+						dataPoints: dataArr
+                    }
+                ]
+            });
+            resultsChart.render();	
+        }
+        
+        $('#clear').click(function() {		
+            clearPrevious()
+        });
+        
+        $('.resultChart').click(function(){
+              var id = $(this).attr('id');
+              alert(id)
+              $(id).remove();
+        })
+		
+		$('#mostRecent').html("Your most recent search: " + localStorage.getItem("recentSearch") + "<br/>");
+        
+        function clearPrevious(){
+            $('#result').empty();
+			$('#chartContainer').empty();
+            $('#chartResults').empty();
+            $('#resultsSection').hide();
+			 $('#submitButton').prop('disabled', false);
+			
+            startDateIdx = -1;
+            var csv = []
+            var currResult=0;			
+            var allMatches =[];
+            console.clear();
+        }
+        
+        function getCSV(url, startDate, endDate, errorPct) {                             
+                 
+                 Papa.parse(url, {
+                  download: true,
+                  header: true,
+                  dynamicTyping: true,
+                  complete: function(fetchedCSV) {				  
+                        if (fetchedCSV == null) {
+                            alert('Data not found.')
+                        }
+
+						csv = fetchedCSV;
+                        
+                        if (!(checkDates(startDate, endDate))) {
+                            return false;
+                        }
+                        
+                        var found = false;
+                        var dataSet = getPatternDataSet(fetchedCSV, startDate, endDate);
+                        if (dataSet.length > 0) console.log(dataSet);
+                    
+                        //var dataSet = convertToPercentages(dataSet);
+                        makeChart(dataSet, "chartContainer")
+                        //console.log(dataSet);                
+
+                        
+                        fetchedCSV.data.reverse();
+                                            
+                       //Find all instances where open, close, high, and low match the first candle in the pattern
+                        for(var i=0; i < (fetchedCSV.data.length - dataSet.length); i++) {
+                            var k = 0;
+                            var temp = [];
+                            for ( ; k < dataSet.length - 1; k++) {
+                                //offset by one day for fetchedCSV		
+                                temp.push(fetchedCSV.data[i+k])
+                                if (!equalWhenComparedAsPercentages(dataSet[k], dataSet[k + 1], fetchedCSV.data[i+ k + 1], fetchedCSV.data[i+k], errorPct)) {                               	 	
+                                  break;
+                                }  						
+                            }
+                            
+                            if (k==dataSet.length - 1) {								
+                                temp.unshift(fetchedCSV.data[i+k+1]);								
+                                allMatches.push(temp);									
+                                found = true;
+                            }    
+                        }      
+                        if (!found) {
+                            toggleLoading();
+                            alert('We could not find any matches. Please try a new search.');    
+							clearPrevious();							
+                        }
+                        else {
+                            displayResults();
+                            toggleLoading();
+							$('#resultsSection').show();
+                        }
+                   }
+                });	
+            
+        }
+        
+        function displayResults() {
+            $('#result').append("<div class='alert alert-success'> Match found on: " + allMatches[currResult][0].timestamp + " <br/><span id='numRemaining'/>	</div>"); 
+            $('#chartResults').html("<div id='resultSuccess' className='resultChart' ></div>")
+            $('#numRemaining').html('(' + (allMatches.length - currResult - 1) + ' remaining)')
+			makeChart(allMatches[currResult], "resultSuccess");	
+			$('#submitButton').prop('disabled', false);			
+        }
+        
+        function toggleLoading() {
+            
+            if ($('#loading').length == 0) {	
+            
+                $('#loading-container').append('<img src="loading.gif" alt="loading" id="loading" class="centered"/>')		
+                $('#loading').toggleClass('perfect-center');
+            }
+            else {									
+                $('#loading').remove();
+            }
+        }
+                
+        $('#viewNext').click(function(){
+            if ((currResult + 1) < allMatches.length) {
+                $('#result').empty();
+                $('#chartResults').empty();
+                currResult++;					
+                displayResults();
+                $('#viewPrevious').prop('disabled', false);
+            }
+            else {
+                $('#viewNext').prop('disabled', true);
+            }
+        }) 	
+        
+        $('#viewPrevious').click(function(){
+            if ((currResult - 1) >= 0) {
+                $('#result').empty();
+                $('#chartResults').empty();
+                currResult--;	
+                displayResults();
+                $('#viewNext').prop('disabled', false);				
+            }
+            else {
+                $('#viewPrevious').prop('disabled', true);
+            }
+        })
+        
+        $('#viewNextCandles').click(function(){
+				var lastCandle = resultsChart.options.data[0].dataPoints[resultsChart.options.data[0].dataPoints.length - 1].label;				
+				var nextPattern = getNextNCandles(csv, lastCandle, 5);
+								
+				for (var i=0; i< nextPattern.length; i++){
+					var date =  nextPattern[i].timestamp;
+					if (nextPattern[i].open != "undefined") {
+						var tempArr = [nextPattern[i].open, nextPattern[i].high, nextPattern[i].low, nextPattern[i].close];						
+						resultsChart.options.data[0].dataPoints.push({label: date, y: tempArr });
+					}
+				}	
+				resultsChart.render();					
+        })
+
+    </script>
+</html>

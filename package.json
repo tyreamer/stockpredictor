@@ -1,0 +1,17 @@
+{
+  "name": "stockpredictor",
+  "version": "1.0.0",
+  "description": "",
+  "main": "\u001b[D\u001b[D\u001b[D\u001b[D\u001b[app\u001bpredict\u001b[C\u001b[C\u001b[C\u001b[C\u001b[app.js",
+  "dependencies": {
+    "babyparse": "^0.4.6",
+    "express": "^4.15.3",
+    "fast-csv": "^2.4.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}

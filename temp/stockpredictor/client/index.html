@@ -1,0 +1,95 @@
+<title></title><link href=https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css rel=stylesheet><script src=https://unpkg.com/react@15/dist/react.js></script><script src=https://unpkg.com/react-dom@15/dist/react-dom.js></script><script src=https://cdnjs.cloudflare.com/ajax/libs/babel-core/5.8.25/browser.js></script><script src=./papaparse.min.js></script><script src=https://code.jquery.com/jquery-3.2.1.min.js crossorigin=anonymous integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="></script><script src=./canvasjs.min.js></script><script src=http://yui.yahooapis.com/3.18.1/build/yui/yui-min.js></script><script src=https://cdnjs.cloudflare.com/ajax/libs/axios/0.16.2/axios.min.js></script><style>@font-face{font-family:PassionOneBold;src:url(PassionOneBold.otf) format('truetype'),url(PassionOneBold.ttf) format('truetype')}#mainBody{padding-top:10%}body{font-family:Lato,sans-serif}.resultChart{clear:both}#viewNextCandles{height:60px;margin-top:150px}.navigateMatches{margin-top:15%}.centered{display:block;margin-left:auto;margin-right:auto}</style><div><div class=container><div class=row><div id=mainBody></div></div></div></div><script type=text/babel>var startDateIdx = -1;
+        var csv = []
+        var currResult=0;			
+        var allMatches =[];
+        var resultsChart;
+		
+        class RangeCheck extends React.Component{
+             
+			
+            examine(a){a.preventDefault();if(!(document.getElementById("ticker").value.match(/^[A-Za-z]+$/))) return false;$("#submitButton").prop("disabled",!0);toggleLoading();clearPrevious();if(document.getElementById("ticker").value&&document.getElementById("startDate").value&&document.getElementById("endDate").value&&document.getElementById("percentError").value){var b=document.getElementById("ticker").value.trim();var c=document.getElementById("startDate").value;var d=document.getElementById("endDate").value;var e=document.getElementById("percentError").value;localStorage.setItem("recentSearch",
+[b,c,d,e])}else(a=localStorage.getItem("recentSearch").split(","))?(b=a[0],c=a[1],d=a[2],e=a[3]):alert("Please enter all values before submitting.");getCSV("https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol="+b+"&apikey=L8WBFX43LBSW8D3V&datatype=csv&outputsize=full",c,d,e)};
+            
+            render() {
+                                
+                return (
+                    <div>
+                        <div className="col-md-4" id="searchArea">		   
+                            <form onSubmit= { this.examine }>													
+                                <h3>Candle Screener </h3>
+								<div className="form-group">              
+									<div>
+                                        <input type="text" className="form-control" id="ticker" style= {{ textTransform: 'uppercase' }} placeholder="Ticker" ref="ticker"/>
+                                    </div>	
+									<br/>
+									<div>
+                                        <label htmlFor="startDate">Start Date:</label>
+										<div className="input-group date">
+											<input className="form-control" id="startDate" type="date"/>
+											<span className="input-group-addon"><span className="glyphicon-calendar glyphicon"></span></span>
+										</div>
+                                    </div>
+									<br/>
+                                    <div>
+                                       <label htmlFor="endDate">End Date:</label>
+									   <div className="input-group date">
+											<input className="form-control" id="endDate" type="date"/>
+											<span className="input-group-addon"><span className="glyphicon-calendar glyphicon"></span></span>
+										</div>
+                                    </div>	
+                                    <div>	
+                                        <input className="form-control" id="percentError" type="number" style={{ display: 'none' }}defaultValue="50"/>
+                                    </div>
+                                </div>	
+								<button type="submit" id="submitButton" className="btn btn-block btn-primary" value="Add">Find all matches!</button>	
+								<button type="button" id="clear" className="btn btn-block btn-danger" value="Clear">Reset</button>
+												
+								<div id="mostRecent"></div>    
+                            </form> 
+                            <div>							
+                            <div id="loading-container"></div>							
+							 <div className = "row">								
+								<div id="chartContainer" className="col-md-11" style={{ height: '200px' }}></div>	
+								<div className="col-md-1"></div>
+							 </div>
+                        </div>							
+                        </div>
+                        
+                        <div className="col-md-8">
+							 <section id="resultsSection" style={{ display: 'none' }}>
+								 <div className = "row">
+									<div className="col-xs-2">									
+										<button type='button' className='btn btn-default navigateMatches' id='viewPrevious' style= {{ float: 'right' }}><span className='glyphicon glyphicon-menu-left'/> </button>									
+									</div>	
+									<div className="col-xs-8">	
+										<p id="result" style={{ textAlign: 'center' }}> </p>			
+									</div>
+									<div className="col-xs-2">	
+										<button type='button' className='btn btn-default navigateMatches' id='viewNext' style= {{ float: 'left' }}><span className='glyphicon glyphicon-menu-right'/></button>
+									</div>									
+								</div>
+								 <div className = "row">		
+									<div id="chartResults" className="col-md-11"  style={{ height: '400px' }}></div>
+									<div className="col-md-1" style={{ height: '400px' }}>
+										<button type='button' className='btn btn-info' id='viewNextCandles'> <span className='glyphicon glyphicon-forward'/></button>
+									</div>
+								 </div>	
+							</section>
+                        </div>				
+                    </div>
+                    
+                );
+            }
+        };
+
+        ReactDOM.render(
+            <RangeCheck />, document.getElementById("mainBody")
+        );
+
+function checkDates(b,c){var d=new Date,a=new Date(b),e=new Date(c);return a.getTime()>=d.getTime()?(alert("Start date cannot be today or in the future."),!1):e.getTime()<a.getTime()?(alert("End date cannot be before start date."),!1):!0};
+function equalWhenComparedAsPercentages(c,a,e,b,d){c=d/100;if(a===b)return!1;a=getCandlePartsAsPercentage(a);b=getCandlePartsAsPercentage(b);return a.IsGreen===b.IsGreen&&a.TopTail-c<=b.TopTail&&a.TopTail+c>=b.TopTail&&a.Body-c<=b.Body&&a.Body+c>=b.Body&&a.BottomTail-c<=b.BottomTail&&a.BottomTail+c>=b.BottomTail?!0:!1};        
+function getPatternDataSet(a,e,d){for(var b=[],c=0;c<a.data.length-1;c++)if(a.data[c].timestamp==e){startDateIdx=c;break}if(-1!=startDateIdx){for(b.push(a.data[startDateIdx+1]);a.data[startDateIdx].timestamp!=d&&0<startDateIdx;)b.push(a.data[startDateIdx]),startDateIdx--;if(a.data[startDateIdx].timestamp==d)b.push(a.data[startDateIdx]);else return alert("End date was not found. Make sure this was not a stock holiday."),[]}else return alert("Start date was not found. Make sure this was not a stock holiday."),
+[];return b};function getNextNCandles(a,b,d){a.data[0].timestamp<a.data[1].timestamp&&a.data.reverse();for(var e=[],c=0;c<a.data.length-1;c++)if(a.data[c].timestamp==b){startDateIdx=c;break}if(-1!=startDateIdx)for(startDateIdx--;0<d;)null!=a.data[startDateIdx]&&e.push(a.data[startDateIdx]),startDateIdx--,d--;else return alert("Something went wrong, please try again."),[];return e}
+function getCandlePartsAsPercentage(a){var b=0<a.close-a.open?!0:!1;return{IsGreen:b,TopTail:b?(a.high-a.close)/a.close*100:(a.high-a.open)/a.open*100,Body:b?(a.open-a.close)/a.close*100:(a.close-a.open)/a.open*100,BottomTail:b?(a.low-a.open)/a.open*100:(a.low-a.close)/a.close*100}};function makeChart(b,c){c=c.toString();for(var d=[],a=1;a<b.length;a++){var e=b[a].timestamp;"undefined"!=b[a].open&&d.push({label:e,y:[b[a].open,b[a].high,b[a].low,b[a].close]})}resultsChart=new CanvasJS.Chart(c,{zoomEnabled:!0,axisY:{gridThickness:0,title:"",tickLength:0,margin:0,lineThickness:0,valueFormatString:" ",includeZero:!1},axisX:{gridThickness:0,title:"",tickLength:0,margin:0,lineThickness:0,valueFormatString:" "},data:[{risingColor:"#5cb85c",color:"#428bca",type:"candlestick",dataPoints:d}]});
+resultsChart.render()}$("#clear").click(function(){clearPrevious()});$(".resultChart").click(function(){var a=$(this).attr("id");$(a).remove()});$('#mostRecent').html("Your most recent search: " + localStorage.getItem("recentSearch") + "<br/>");function clearPrevious(){$("#result").empty();$("#chartContainer").empty();$("#chartResults").empty();$("#resultsSection").hide();$("#submitButton").prop("disabled",!1);startDateIdx=-1;console.clear()};function getCSV(k,f,g,l){Papa.parse(k,{download:!0,header:!0,dynamicTyping:!0,complete:function(a){null==a&&alert("Data not found.");csv=a;if(!checkDates(f,g))return!1;var h=!1,c=getPatternDataSet(a,f,g);0<c.length&&console.log(c);makeChart(c,"chartContainer");a.data.reverse();for(var d=0;d<a.data.length-c.length;d++){for(var b=0,e=[];b<c.length-1&&(e.push(a.data[d+b]),equalWhenComparedAsPercentages(c[b],c[b+1],a.data[d+b+1],a.data[d+b],l));b++);b==c.length-1&&(e.unshift(a.data[d+b+1]),allMatches.push(e),
+h=!0)}h?(displayResults(),toggleLoading(),$("#resultsSection").show()):(toggleLoading(),alert("We could not find any matches. Please try a new search."),clearPrevious())}})};function displayResults(){$("#result").append("<div class='alert alert-success'> Match found on: "+allMatches[currResult][0].timestamp+" <br/><span id='numRemaining'/>\t</div>");$("#chartResults").html("<div id='resultSuccess' className='resultChart' ></div>");$("#numRemaining").html("("+(allMatches.length-currResult-1)+" remaining)");makeChart(allMatches[currResult],"resultSuccess");$("#submitButton").prop("disabled",!1)};function toggleLoading(){0==$("#loading").length?($("#loading-container").append('<img src="loading.gif" alt="loading" id="loading" class="centered"/>'),$("#loading").toggleClass("perfect-center")):$("#loading").remove()};$("#viewNext").click(function(){currResult+1<allMatches.length?($("#result").empty(),$("#chartResults").empty(),currResult++,displayResults(),$("#viewPrevious").prop("disabled",!1)):$("#viewNext").prop("disabled",!0)});	$("#viewPrevious").click(function(){0<=currResult-1?($("#result").empty(),$("#chartResults").empty(),currResult--,displayResults(),$("#viewNext").prop("disabled",!1)):$("#viewPrevious").prop("disabled",!0)});$("#viewNextCandles").click(function(){for(var b=getNextNCandles(csv,resultsChart.options.data[0].dataPoints[resultsChart.options.data[0].dataPoints.length-1].label,5),a=0;a<b.length;a++){var c=b[a].timestamp;"undefined"!=b[a].open&&resultsChart.options.data[0].dataPoints.push({label:c,y:[b[a].open,b[a].high,b[a].low,b[a].close]})}resultsChart.render()});</script>
